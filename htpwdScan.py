@@ -1,6 +1,6 @@
 # encoding=utf-8
-# An HTTP(s) weak pass scanner   htpwdScan v 0.0.1
-# my[at]lijiejie.com  From http://www.lijiejie.com
+# An HTTP(s) weak pass scanner v 0.0.1
+# my[at]lijiejie.com
 
 import sys
 import argparse
@@ -246,6 +246,8 @@ def do_request():
                 html_doc = html_doc.replace('\r\n', '\\r\\n')
                 html_doc = html_doc.replace('\r', '\\r')
                 html_doc = html_doc.replace('\n', ' \\n')
+                html_doc = html_doc.replace('\t', ' ')
+                html_doc = html_doc.replace('  ', ' ')
                 # Debug On
                 if args.debug:
                     lock.acquire()
@@ -253,7 +255,7 @@ def do_request():
                     print res_headers
                     print ''
                     if os.name =='nt':
-                        print html_doc.encode('gbk')
+                        print html_doc.encode('gbk','ignore')
                     else:
                         print html_doc
                     print '#' * 64

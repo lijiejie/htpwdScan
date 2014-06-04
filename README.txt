@@ -1,6 +1,6 @@
-﻿htpwdScan是一个HTTP(S)弱口令扫描脚本，它的特点是:
+﻿htpwdScan是一个HTTP(s)弱口令扫描脚本，它的特点是:
 
-1) 支持HTTP(S)代理扫描
+1) 支持HTTP(s)代理扫描
 
 2) 字典序列的生成和破解并行，可以为多个表单元素导入字典，可导入超大字典文件
 
@@ -32,6 +32,5 @@
   -o OUTPUT             输出文件路径, 默认 Cracked_Pass.txt
   -nov                  不显示详细进度, 只打印破解成功的
   -debug                调试，通过测试发送一次HTTP请求判断脚本是否工作正常
-
 
 my[at]lijiejie.com      http://www.lijiejie.com
