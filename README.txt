@@ -1,14 +1,11 @@
 ﻿htpwdScan是一个HTTP(s)弱口令扫描脚本，它的特点是:
 
 1) 支持HTTP(s)代理扫描
-
 2) 字典序列的生成和破解并行，可以为多个表单元素导入字典，可导入超大字典文件
-
 3) 可以抓包后从文件导入HTTP请求
-
 4) 通过设置X-Forwarded-For可随机伪造源IP
 
-4) 在Linux和安装python的Windows系统下工作
+运行环境:  python 2.7+
 
 
 参数说明：
@@ -34,3 +31,6 @@
   -debug                调试，通过测试发送一次HTTP请求判断脚本是否工作正常
 
 my[at]lijiejie.com      http://www.lijiejie.com
+
+Update log:
+2014/6/23    Bug Fixed. Add new features. Load HTTP proxies from file under development.
