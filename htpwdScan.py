@@ -14,6 +14,7 @@ Under development:
 To do:
     1. Add HTTP basic auth support
     2. Add hashing support for parameters
+    3. Verify HTTP proxies from File
 
 '''
 
@@ -58,7 +59,7 @@ def get_args():
     parser.add_argument('-hsuc', metavar='HSUC', default='', type=str,
                         help='String indicates success in response headers')
     parser.add_argument('-proxy', metavar='Server:Port', default='', type=str,
-                        help='Set HTTP proxy, e.g.\n-proxy=127.0.0.1:8000')
+                        help='Set HTTP proxies, e.g.\n-proxy=127.0.0.1:8000,8.8.8.8:8000')
     parser.add_argument('-proxylist', metavar='ProxyListFile', default='', type=str,    # added on 2014-6-23
                         help='Load HTTP proxies from file, one proxy per line, e.g.\n-proxylist=proxy.txt')
     parser.add_argument('-no302', default=False, action='store_true',
@@ -73,10 +74,12 @@ def get_args():
                         help='Retry when it appears in response text, \ne.g. -rtxt="IP blocked"')
     parser.add_argument('-rheader', metavar='RetryHeader', type=str, default='',    # added on 2014-6-23
                         help='Retry when it appears in response headers')
+    parser.add_argument('-sleep', metavar='SECONDS', type=str, default='',    # added on 2014-6-24
+                        help='Sleep some time after each request,\nto solve web server block IP')
     parser.add_argument('-nov', default=False, action='store_true',
-                        help='Do not print verbose messages, only print cracked ones')
+                        help='Do not print verbose info, only print cracked ones')
     parser.add_argument('-debug', default=False, action='store_true',
-                        help='Print response header and response text')
+                        help='Send a request and check \nresponse headers and response text')
     parser.add_argument('-v', action='version', version='%(prog)s 0.0.2')
     if len(sys.argv) == 1:    # show help when no args
         sys.argv.append('-h')
@@ -102,29 +105,39 @@ if args.debug:
     print args
     print '#' * 64
 
+
+proxy_list = []
+
 # Proxy enablded
 # I will not check weather the proxy server works fine, please do it yourself
-if len(args.proxy) >= 10 and args.proxy.find(':') > 0:    
-    pserver, pport = args.proxy.split(':')
-    args.proxy_on = True
-elif len(args.proxy) > 0:
-    raise Exception('Invalid Proxy Server!')    # added on 2014-6-23
-else:
-    args.proxy_on = False
 
+if args.proxy:
+    for proxy_item in args.proxy.split(','):
+        proxy_item = proxy_item.strip()
+        if len(proxy_item) >= 10 and proxy_item.find(':') > 0:    
+            proxy_list.append(proxy_item)
+            args.proxy_on = True
+    if len(proxy_list) < 1:
+        raise Exception('Invalid Proxy Server!')
+    else:
+        args.proxy_on = True
 #
 # Load HTTP proxies from a file
 #
 if args.proxylist:
     if not os.path.exists(args.proxylist):
         raise Exception('Proxy List File not found!')
-    proxy_list = []
+    
     with open(args.proxylist, 'r') as inFile:
         while True:
             line = inFile.readline().strip()
             if len(line) < 1: break
             if line.find(':') > 0 and len(line) >= 10:
                 proxy_list.append(line)
+    if len(proxy_list) < 1:
+        raise Exception('Fail to load HTTP proxies from file!')
+    else:
+        args.proxy_on = True
     if args.debug:
         print '#' * 16, 'DEBUG on, below is proxy list', '#' * 17
         print proxy_list
@@ -136,6 +149,7 @@ print 'Job started on # %s #' % time.asctime()
 
 #
 # Generate parameters queue asynchronously
+# Todo: fix bug, close file
 #
 
 queue = Queue.Queue()    
@@ -186,7 +200,7 @@ threading.Thread(target=gen_queue).start()   # put parameters in queue
 
 headers = {}
 def parse_request():     
-    if args.u != None:    # parse from url
+    if args.u != None:    # parse url
         (args.scm, args.netloc, args.path, params, args.query, fragment) = \
                    urlparse.urlparse(args.u, 'http')
     else:    # load request from file
@@ -197,8 +211,8 @@ def parse_request():
         else:
             args.scm = 'http'
         lines = post_text.split('\n')
-        first_line = lines[0]
-        if first_line.find('GET') >= 0:
+        first_line = lines[0].strip()
+        if first_line.find('GET ') == 0:
             args.m = 'GET'
         else:
             args.m = 'POST'
@@ -207,7 +221,7 @@ def parse_request():
         if args.m == 'POST':    # find query data
             for i in range(len(lines) -1 , 0, -1):
                 if len(lines[i].strip()) > 0:
-                    args.query = lines[i]
+                    args.query = lines[i].strip()
                     break
         else:    # deal with GET
             (scm, netloc, args.path, params, args.query, fragment) = urlparse.urlparse(args.path)
@@ -229,6 +243,10 @@ def parse_request():
             headers['Referer'] = re.search('Referer: (.*)', post_text).group(1).strip()
         except:
             pass
+
+    args.netloc = args.netloc.strip()    # added on 2014/6/24
+    args.query = args.query.strip()
+    
     if args.fip:
         headers['X-Forwarded-For'] = str(random.randint(1,255)) + '.' + \
                                    str(random.randint(1,255)) + '.' + \
@@ -237,7 +255,8 @@ def parse_request():
     headers['Cache-Control'] = 'no-cache'
     if args.m == 'POST':
         headers['Content-Type'] = 'application/x-www-form-urlencoded'
-    if not args.netloc.find(':') > 0:    # under Linux, netloc must splited
+        
+    if args.netloc.find(':') < 0:    # under Linux, host_name and port are both required
         args.host = args.netloc.strip()
         args.host_port = 80
     else:
@@ -248,8 +267,16 @@ def parse_request():
 parse_request()
 
 
+#
+# Handle HTTP Request
+#
+
 lock = threading.Lock()
+proxy_index = 0
+
 def do_request():
+    global proxy_list
+    global proxy_index
     while True:
         params = queue.get()
         if params == None:
@@ -257,41 +284,62 @@ def do_request():
             return
         else:
             params = params.split(' ')
+            
         data = args.query
         index = 0
-        for p in selected_params:    # replace param value
-            if data.find(p[0] + '=') >= 0:
-                data = re.sub('^' + p[0] + '=[^&]*', p[0] + '=' + params[index], data)
-                data = re.sub('&' + p[0] + '=[^&]*', '&' + p[0] + '=' + params[index], data)
+        data_output = ''    # optmize output
+        for p in selected_params:    # set value for target parameter
+            #
+            # bug fixed on 2014/6/24, add urlencode for params
+            #
+            data_output += p[0] + '=' + params[index] + '&'
+            str_param = urllib.urlencode( {p[0]:  params[index]} )    
+            if data.find(p[0] + '=') == 0 or data.find('&' + p[0] + '=') > 0:   
+                data = re.sub('^' + p[0] + '=[^&]*', str_param, data)    
+                data = re.sub('&' + p[0] + '=[^&]*', '&' + str_param, data)
             else:
-                data += '&' + p[0] + '=' + params[index]
+                data = data + '&' + str_param
             index += 1
+            
         index = 0    # replace something like {user} to its item val
         for p in selected_params:
             if data.find('{%s}' % p[0]) >= 0:
-                data = data.replace('{%s}' % p[0], params[index])
+                data = data.replace('{%s}' % p[0], urllib.quote(params[index]) )    # bug fixed, 2014/6/24
+                data_ouput = data_output.replace('{%s}' % p[0], urllib.quote(params[index]) )
         data = data.strip('&')
+        data_output = data_output.strip('&')
+        
         if not args.nov:
             lock.acquire()
-            print 'try', data
+            print 'try', data_output
             lock.release()
         while True:
 ##            try:
             if args.proxy_on:
+                lock.acquire()    #
+                cur_proxy = proxy_list[proxy_index]
+                proxy_index += 1
+                if proxy_index > len(proxy_list) - 1:
+                    proxy_index = 0
+                lock.release()    #
+                pserver, pport = cur_proxy.split(':')
                 if args.scm == 'https':    # request via proxy server
-                    conn = httplib.HTTPSConnection(args.proxy)
+                    conn = httplib.HTTPSConnection(cur_proxy)
                     if args.netloc.find(':') > 0:
-                        conn.set_tunnel(args.host, int(args.netloc.split(':')[1]) )    # not port 443
+                        conn.set_tunnel(args.host, args.host_port )    # not port 443
                     else:
                         conn.set_tunnel(args.host, 443)
                 else:
-                    conn = httplib.HTTPConnection(args.proxy)
-                if args.m == 'POST':
+                    conn = httplib.HTTPConnection(cur_proxy)
+                # 
+                # Proxy server needs to know full url
+                #
+                if args.m == 'POST': 
                     conn.request(method=args.m,
                                  url=args.scm + '://' + args.netloc + args.path,
                                  body=data,
                                  headers=headers)
-                else:    # get, need full url
+                else:    
                     conn.request(method=args.m,
                                  url=args.scm + '://' + args.netloc + args.path + '?' + data,
                                  headers=headers)
@@ -310,11 +358,8 @@ def do_request():
             if charset:
                 charset = charset.group(1).strip()
             html_doc = decode_response_text( response.read(), charset)
-            html_doc = html_doc.replace('\r\n', '\\r\\n')
-            html_doc = html_doc.replace('\r', '\\r')
-            html_doc = html_doc.replace('\n', ' \\n')
-            html_doc = html_doc.replace('\t', ' ')
-            html_doc = html_doc.replace('  ', ' ')
+            html_doc = html_doc.replace('\r\n', '\\r\\n').replace('\r', '\\r').replace('\n', ' \\n').replace('\t', ' ')
+            html_doc = re.sub(' +', ' ', html_doc)    # Only leave one blank char
             # Debug On
             if args.debug:
                 lock.acquire()
@@ -333,9 +378,12 @@ def do_request():
                (args.herr and res_headers.find(args.herr) < 0) or \
                (args.hsuc and res_headers.find(args.hsuc) >=0 ):
                 lock.acquire()
-                print '>>> Found %s <<<' % data
+                print '>>> Found %s <<<' % data_output
                 with open(args.o, 'a') as outFile:
-                    outFile.write(data + '\n')
+                    if response.status == 302:
+                        outFile.write('[302] ' + data + '\n')
+                    else:
+                        outFile.write(data + '\n')
                 lock.release()
             conn.close()
             break
@@ -363,11 +411,13 @@ def decode_response_text(str, lang):
         pass
     raise Exception('Can not decode webpage')
 
+
 threads = []
 for i in range(args.t):
     t = threading.Thread(target=do_request)
     t.start()
     threads.append(t)
+
 
 for t in threads:
     t.join()

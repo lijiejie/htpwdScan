@@ -33,4 +33,6 @@
 my[at]lijiejie.com      http://www.lijiejie.com
 
 Update log:
-2014/6/23    Bug Fixed. Add new features. Load HTTP proxies from file under development.
+2014/6/23    Bug Fixed. Add support for loading HTTP proxies from file under development.
+2014/6/24    Can set more than one HTTP porxy, e.g. -proxy=1.1.1.1:8000,2.2.2.2:8000
+             Simplify output.
