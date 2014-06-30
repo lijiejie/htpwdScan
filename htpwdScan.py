@@ -42,16 +42,19 @@ def get_args():
     parser.add_argument('-f', metavar='REQUESTFILE', type=str,
                         help='Load HTTP request from file')
     parser.add_argument('-https', default=False, action='store_true',
-                        help='Set -https only when load request from POSTFILE and \nSSL was enabled')
+                        help='Set -https only when load request from file and \nHTTPS was enabled')    # 2014/6/30
     parser.add_argument('-u', metavar='REQUESTURL', type=str,
-                        help='Explicitly Set request URL')
+                        help='Explicitly Set request URL, e.g.\n' + \
+                        '-u="http://www.test.com/login.php"')
     parser.add_argument('-m', metavar='METHOD', type=str, default='POST',
                         choices=['POST', 'GET'],
-                        help='Set -m=GET only when -u was set and method is GET,\ndefault is POST')
+                        help='Set -m=GET only when -u was set and request method \nis GET,default is POST')
     parser.add_argument('-d', metavar='Param=DictFilePath', type=str, nargs='+', required=True,
-                        help='set dictionary for each parameter, \n' + \
-                        'support hash function like md5, md5_16, sha1. e.g.\n' + \
+                        help='set dict file for each parameter, \n' + \
+                        'support hash functions like md5, md5_16, sha1. e.g.\n' + \
                         '-d user=users.dic pass=md5(pass.dic)')
+    parser.add_argument('-no302', default=False, action='store_true',
+                        help='302 redirect insensitive, default is sensitive')
     parser.add_argument('-err', metavar='ERR', default='', type=str, nargs='+',
                         help='String indicates fail in response text, e.g.\n-err "user not exist" "password wrong"')
     parser.add_argument('-suc', metavar='SUC', default='', type=str, nargs='+',
@@ -63,13 +66,11 @@ def get_args():
     parser.add_argument('-proxy', metavar='Server:Port', default='', type=str,
                         help='Set HTTP proxies, e.g.\n-proxy=127.0.0.1:8000,8.8.8.8:8000')
     parser.add_argument('-proxylist', metavar='ProxyListFile', default='', type=str,    # added on 2014-6-23
-                        help='Load HTTP proxies from file, one proxy per line, e.g.\n-proxylist=proxy.txt')
-    parser.add_argument('-no302', default=False, action='store_true',
-                        help='302 redirect insensitive, default is sensitive')
+                        help='Load HTTP proxies from file, one proxy per line, e.g.\n-proxylist=proxys.txt')
     parser.add_argument('-fip', default=False, action='store_true',
                         help='Spoof source IP')
     parser.add_argument('-t', metavar='THREADS', type=int, default=50,
-                        help='default 50 threads')
+                        help='50 threads by default')
     parser.add_argument('-o', metavar='OUTPUT', type=str, default='Cracked_Pass.txt',
                         help='Output file, defaut is Cracked_Pass.txt')
     parser.add_argument('-rtxt', metavar='RetryText', type=str, default='',    # added on 2014-6-23
@@ -82,12 +83,12 @@ def get_args():
                         help='Retry when it didn\'t appear in response headers, \ne.g. -rheader="Content-Length:"')
     parser.add_argument('-sleep', metavar='SECONDS', type=str, default='',    # added on 2014-6-24
                         help='Sleep some time after each request,\navoid IP blocked by web server')
-    parser.add_argument('-nov', default=False, action='store_true',
-                        help='Do not print verbose info, only print cracked ones')
     parser.add_argument('-debug', default=False, action='store_true',
                         help='Send a request and check \nresponse headers and response text')
+    parser.add_argument('-nov', default=False, action='store_true',
+                        help='Do not print verbose info, only print the cracked ones')
     parser.add_argument('-v', action='version', version='%(prog)s 0.0.2')
-    if len(sys.argv) == 1:    # show help when no args
+    if len(sys.argv) == 1:    # show help msg while no args
         sys.argv.append('-h')
     return parser.parse_args()
 
@@ -97,6 +98,8 @@ args = get_args()
 
 #
 # System specific encoding and decoding
+# Use gbk under Windows
+# Use utf-8 under Linux
 #
 
 def system_encode(istr):
@@ -111,7 +114,9 @@ def system_decode(istr):
     else:
         return istr.decode('utf-8', 'ignore')
 
-
+#
+# decode error tags and success tags
+#
 if len(args.err) > 0:
     for i in range( len(args.err) ):
         args.err[i] = system_decode(args.err[i])
@@ -131,12 +136,12 @@ if args.debug:
     print '#' * 64
 
 
-proxy_list = []
-args.proxy_on = False
-
+#
 # Proxy enablded
 # I will not check weather the proxy server works fine, please do it yourself
-
+#
+proxy_list = []
+args.proxy_on = False
 if args.proxy:
     for proxy_item in args.proxy.split(','):
         proxy_item = proxy_item.strip()
@@ -152,7 +157,7 @@ if args.proxy:
 #
 if args.proxylist:
     if not os.path.exists(args.proxylist):
-        raise Exception('Proxy List File not found!')
+        raise Exception('Proxy list file not found!')
     
     with open(args.proxylist, 'r') as inFile:
         while True:
@@ -175,37 +180,45 @@ print 'Job started on # %s #' % time.asctime()
 
 #
 # Generate parameters queue asynchronously
-# Todo: fix bug, close file
 #
 
-queue = Queue.Queue()    
-selected_params = []
+queue = Queue.Queue()
+selected_params = []    # target parameters
 args.md5 = []
 args.md5_16 = []
 args.sha1 = []
 
 def gen_queue():
     #
-    # generate python code, here I will not close files, forgive me...
+    # generate executable python code,
+    # the code will be used to generate parameters queue
+    # Bug fixed, all files will be closed. 2014/6/30
+    # Bug fixed, file must seek 0 after each loop. 2014/6/30
     #
     str_code = ''
+    str_code_prefix = ''
+    str_code_postfix = ''
     indent = 0
     for param in args.d:
         pname = param.split('=')[0].strip()    # parameter name
         fname = param.split('=')[1].strip()    # dict file name
-        if fname[:4] == 'md5(' and fname[-1:] == ')':    # MD5 32-bit hashing
+        if fname[:4].lower() == 'md5(' and fname[-1:] == ')':    # MD5 32-bit hashing
             args.md5.append(pname)
             fname = fname[4: -1]
-        elif fname[:7] == 'md5_16(' and fname[-1:] == ')':    # MD5 16-bit hashing
+        elif fname[:7].lower() == 'md5_16(' and fname[-1:] == ')':    # MD5 16-bit hashing
             args.md5_16.append(pname)
             fname = fname[7: -1]
-        elif fname[:5] == 'sha1(' and fname[-1:] == ')':    # SHA1 40-bit hashing
+        elif fname[:5].lower() == 'sha1(' and fname[-1:] == ')':    # SHA1 40-bit hashing
             args.sha1.append(pname)
             fname = fname[5: -1]
-        selected_params.append( (pname, fname) )
+        selected_params.append( (pname, fname) )    # e.g ('user', 'user.dic')
         str_code += '    ' * indent
         indent += 1
-        str_code += "for line" + str(indent) + " in open('" + fname + "', 'r'):\n"
+        str_code_prefix += "file" + str(indent) + " = open(r'" + fname + "', 'r')\n"    # prefix
+        str_code += "file" + str(indent) + ".seek(0)\n"
+        str_code += '    ' * (indent - 1)
+        str_code += "for line" + str(indent) + " in file" + str(indent) + ":\n"
+        str_code_postfix += 'file' + str(indent) + '.close()\n'    # postfix
     str_code += '    ' * indent + 'while True:\n'
     indent += 1
     str_code += '    ' * indent + 'if queue.qsize() < args.t:\n'
@@ -214,7 +227,7 @@ def gen_queue():
     index = 1
     str_line = ''
     for param in args.d[:-1]:
-        str_line += 'line' + str(index) + ".strip() + ' ' + "
+        str_line += 'line' + str(index) + ".strip() + '^^^' + "    # values splited by '^^^'
         index += 1
     str_line += 'line' + str(index) + '.strip()'
     str_code += "queue.put(" + str_line + ")\n"
@@ -224,6 +237,7 @@ def gen_queue():
         for i in range(len(args.d)):
             str_code += '    ' * (indent - 2 - i) + 'break\n'
     str_code += 'for i in range(args.t):\n    queue.put(None)\n'
+    str_code = str_code_prefix + str_code + str_code_postfix.strip()
     if args.debug:
         print '#' * 14, 'DEBUG on, below is generated code', '#' * 15
         print str_code
@@ -317,27 +331,37 @@ lock = threading.Lock()
 proxy_index = 0
 
 def do_request():
-    global proxy_list
-    global proxy_index
     while True:
         params = queue.get()
         if params == None:
             queue.task_done()
             return
         else:
-            params = params.split(' ')    # e.g. params = ['user', 'root']
+            params = params.split('^^^')    # e.g. params = ['user', 'passwd']
             
         data = args.query
+        #
+        # bug fixed on 2014/6/24, add urlencode for param value
+        # Be careful when dealing with params
+        # replace refference object first, later replace query string
+        # at last urlencode
+        # code below needs review 2014/6/30
+        #
+
+        index = 0        
+        for p in selected_params:
+            # refference
+            index2 = 0
+            for p2 in selected_params:
+                params[index] = params[index].replace('{%s}' % p2[0], params[index2])
+                index2 += 1
+            index += 1
+            
+        data_output = ''    # optmized output        
         index = 0
-        data_output = ''    # optmize output
-        for p in selected_params:    # set value for target parameter
-            #
-            # bug fixed on 2014/6/24, add urlencode for params
-            #
+        for p in selected_params:    # replace value for target parameter
             data_output += p[0] + '=' + params[index] + '&'
-            #
-            # add hash support
-            #
+            # hash support: MD5, MD5_16, SHA1
             if args.md5.count(p[0]) > 0:
                 str_param = urllib.urlencode( {p[0]:  hashlib.md5(params[index]).hexdigest()} )
             elif args.md5_16.count(p[0]) > 0:
@@ -345,21 +369,15 @@ def do_request():
             elif args.sha1.count(p[0]) > 0:
                 str_param = urllib.urlencode( {p[0]:  hashlib.sha1(params[index]).hexdigest()} )
             else:
-                str_param = urllib.urlencode( {p[0]:  params[index]} )    
-            if data.find(p[0] + '=') == 0 or data.find('&' + p[0] + '=') > 0:   
+                str_param = urllib.urlencode( {p[0]:  params[index]} )
+
+            if data.find(p[0] + '=') == 0 or \
+               data.find('&' + p[0] + '=') > 0:   # found in query
                 data = re.sub('^' + p[0] + '=[^&]*', str_param, data)    
                 data = re.sub('&' + p[0] + '=[^&]*', '&' + str_param, data)
-            else:
+            else:    # not found, appended to query string
                 data = data + '&' + str_param
             index += 1
-            
-        index = 0    # replace something like {user} to its item val
-        for p in selected_params:
-            if data.find('{%s}' % p[0]) >= 0:
-                data = data.replace('{%s}' % p[0], urllib.quote(params[index]) )    # bug fixed, 2014/6/24
-                data_ouput = data_output.replace('{%s}' % p[0], urllib.quote(params[index]) )
-            index += 1
-
                 
         data = data.strip('&')
         data_output = data_output.strip('&')
@@ -368,33 +386,36 @@ def do_request():
             lock.acquire()
             print 'try', data_output
             lock.release()
-        while True:
+        err_count = 0
+        while err_count < 10:
             try:
                 if args.proxy_on:
-                    lock.acquire()    #
+                    global proxy_list    # code moved here on 2014/6/30
+                    global proxy_index
+                    lock.acquire()    # fetch one proxy server
                     cur_proxy = proxy_list[proxy_index]
                     proxy_index += 1
                     if proxy_index > len(proxy_list) - 1:
                         proxy_index = 0
-                    lock.release()    #
+                    lock.release()    
                     pserver, pport = cur_proxy.split(':')
-                    if args.scm == 'https':    # request via proxy server
+                    if args.scm == 'https':    # https request via proxy server
                         conn = httplib.HTTPSConnection(cur_proxy)
                         if args.netloc.find(':') > 0:
-                            conn.set_tunnel(args.host, args.host_port )    # not port 443
+                            conn.set_tunnel(args.host, args.host_port )    # port may not be 443
                         else:
                             conn.set_tunnel(args.host, 443)
                     else:
                         conn = httplib.HTTPConnection(cur_proxy)
                     # 
-                    # Proxy server needs to know a full url
+                    # Proxy server needs to know the full url
                     #
                     if args.m == 'POST':
                         conn.request(method=args.m,
                                      url=args.scm + '://' + args.netloc + args.path,
                                      body=data,
                                      headers=headers)
-                    else:    
+                    else:
                         conn.request(method=args.m,
                                      url=args.scm + '://' + args.netloc + args.path + '?' + data,
                                      headers=headers)
@@ -455,7 +476,7 @@ def do_request():
                     lock.acquire()
                     print system_encode( '>>> Found %s <<<' % data_output )
                     with open(args.o, 'a') as outFile:
-                        if response.status == 302:
+                        if not args.no302 and response.status == 302:
                             outFile.write( system_encode( '[302] ' + data_output + '\n') )
                         elif args.suc and if_suc:
                             outFile.write( system_encode( '{' + suc_tag_matched + '} ' + data_output + '\n') )
@@ -464,12 +485,17 @@ def do_request():
                     lock.release()
 
                 if args.sleep:
-                    time.sleep(args.sleep)    # sleep for a while
+                    time.sleep( float(args.sleep) )    # sleep for a while
                 break
             except Exception, e:
+                err_count += 1
                 lock.acquire()
                 print 'Error occured while handling request:', e
                 lock.release()
+                try:
+                    conn.close()
+                except:
+                    pass
                 time.sleep(3.0)    # retry 3 seconds later
         queue.task_done()
 
