@@ -124,6 +124,15 @@ if len(args.suc) > 0:
     for i in range( len(args.suc) ):
         args.suc[i] = system_decode(args.suc[i])
 
+#
+# decode retry text and retry no text, added on 2014/7/3
+#
+
+if args.rtxt:
+    args.rtxt = system_decode(args.rtxt)
+if args.rntxt:
+    args.rntxt = system_decode(args.rntxt)
+
 
 if args.f == None and args.u == None:
     raise Exception('Both RequestFILE and RequestURL are missing!\n' + \
@@ -302,12 +311,6 @@ def parse_request():
 
     args.netloc = args.netloc.strip()    # added on 2014/6/24
     args.query = args.query.strip()
-    
-    if args.fip:
-        headers['X-Forwarded-For'] = str(random.randint(1,255)) + '.' + \
-                                   str(random.randint(1,255)) + '.' + \
-                                   str(random.randint(1,255)) + '.' + \
-                                   str(random.randint(1,255))
     headers['Cache-Control'] = 'no-cache'
     if args.m == 'POST':
         headers['Content-Type'] = 'application/x-www-form-urlencoded'
@@ -407,6 +410,12 @@ def do_request():
                             conn.set_tunnel(args.host, 443)
                     else:
                         conn = httplib.HTTPConnection(cur_proxy)
+                    if args.fip:
+                        headers['X-Forwarded-For'] = str(random.randint(1,255)) + '.' + \
+                                                   str(random.randint(1,255)) + '.' + \
+                                                   str(random.randint(1,255)) + '.' + \
+                                                   str(random.randint(1,255))
+                        headers['PHPSESSID'] = random.randint(1, 10000000000000)
                     # 
                     # Proxy server needs to know the full url
                     #
@@ -449,9 +458,9 @@ def do_request():
                 
                 # Retry if server didn't give a resonable response 
                 if args.rtxt and html_doc.find(args.rtxt) > 0:  
-                    raise Exception('Retry for ' + args.rtxt)
+                    raise Exception('Retry for ' + system_encode(args.rtxt) )
                 if args.rntxt and html_doc.find(args.rntxt) < 0:
-                    raise Exception('Retry for no ' + args.rntxt)
+                    raise Exception('Retry for no ' + system_encode(args.rntxt))
                 if args.rheader and res_headers.find(args.rheader) > 0:
                     raise Exception('Retry for header ' + args.rheader)
                 if args.rnheader and res_headers.find(args.rnheader) < 0:
