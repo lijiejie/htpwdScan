@@ -8,12 +8,12 @@ An HTTP(s) weak pass scanner
 my[at]lijiejie.com
 
 Under development:
-    1. Add IP spoof support by loading handreds of HTTP proxies from a file:Done
+    1. Add IP spoof support by loading handreds of HTTP proxies from a file: Done
+    2. Add hashing support for parameters: Done
+    3. Add HTTP basic auth support: Done
 
 To do:
-    1. Add HTTP basic auth support
-    2. Add hashing support for parameters:Done
-    3. Verify thousands of HTTP proxies from File
+    4. Verify thousands of HTTP proxies from File
 
 '''
 
@@ -30,6 +30,8 @@ import urlparse
 import os
 import random
 import hashlib
+import base64
+import copy    # deepcopy
 
 #
 #  Parse command line arguments
@@ -38,7 +40,7 @@ import hashlib
 def get_args():
     parser = argparse.ArgumentParser(prog='htpwdScan',
                                      formatter_class=argparse.RawTextHelpFormatter,
-                                     description='* An HTTP/HTTPS weakpass scanner written By LiJiejie *')
+                                     description='* An HTTP/HTTPS weakpass scanner. By LiJiejie *')
     parser.add_argument('-f', metavar='REQUESTFILE', type=str,
                         help='Load HTTP request from file')
     parser.add_argument('-https', default=False, action='store_true',
@@ -49,7 +51,9 @@ def get_args():
     parser.add_argument('-m', metavar='METHOD', type=str, default='POST',
                         choices=['POST', 'GET'],
                         help='Set -m=GET only when -u was set and request method \nis GET,default is POST')
-    parser.add_argument('-d', metavar='Param=DictFilePath', type=str, nargs='+', required=True,
+    parser.add_argument('-basic', metavar='',type=str, nargs='+',
+                        help='HTTP Basic Auth brute, e.g. -basic users.dic pass.dic')    # add basic auth support 2014/7/31
+    parser.add_argument('-d', metavar='Param=DictFilePath', type=str, nargs='+',
                         help='set dict file for each parameter, \n' + \
                         'support hash functions like md5, md5_16, sha1. e.g.\n' + \
                         '-d user=users.dic pass=md5(pass.dic)')
@@ -91,7 +95,6 @@ def get_args():
     if len(sys.argv) == 1:    # show help msg while no args
         sys.argv.append('-h')
     return parser.parse_args()
-
 
 args = get_args()
 
@@ -137,6 +140,13 @@ if args.rntxt:
 if args.f == None and args.u == None:
     raise Exception('Both RequestFILE and RequestURL are missing!\n' + \
                     ' ' * len('Exception: ')  + 'Use -f or -u to set one')
+
+if args.basic:
+    if len(args.basic) != 2:
+        raise Exception('Two dict files are required, e.g. \n' + ' ' * len('Exception: ') + '-basic users.dic pass.dic')
+    for df in args.basic:
+        if not os.path.exists(df):
+            raise Exception('Dict file not exists:' + df)
 
 if args.debug:
     args.t = 1    # debug on, thread set to 1
@@ -204,6 +214,31 @@ def gen_queue():
     # Bug fixed, all files will be closed. 2014/6/30
     # Bug fixed, file must seek 0 after each loop. 2014/6/30
     #
+    
+    # HTTP basic auth
+    if args.basic:
+        f_user = open(args.basic[0], 'r')
+        f_pass = open(args.basic[1], 'r')
+        for str_user in f_user.xreadlines():
+            f_pass.seek(0)    # be careful we need seek 0
+            for str_pass in f_pass.xreadlines():
+                auth_key = str_user.strip() + ':' + str_pass.strip()
+                while True:
+                    if queue.qsize() < args.t:
+                        queue.put(auth_key)
+                        break
+                    else:
+                        time.sleep(0.001)
+                if args.debug:
+                    break
+            if args.debug:
+                break
+        f_user.close()
+        f_pass.close()
+        for i in range(args.t):
+            queue.put(None)
+        return
+                    
     str_code = ''
     str_code_prefix = ''
     str_code_postfix = ''
@@ -254,7 +289,6 @@ def gen_queue():
     exec(str_code)
 
 threading.Thread(target=gen_queue).start()   # put parameters in queue
-
 
 #
 # Parse HTTP request from file
@@ -325,7 +359,6 @@ def parse_request():
         
 parse_request()
 
-
 #
 # Handle HTTP Request
 #
@@ -339,55 +372,62 @@ def do_request():
         if params == None:
             queue.task_done()
             return
-        else:
-            params = params.split('^^^')    # e.g. params = ['user', 'passwd']
-            
+        local_headers = copy.deepcopy(headers)
+        if args.basic:
+            local_headers['Authorization'] = 'Basic ' + base64.b64encode(params)    # Basic auth: 2014/7/31
         data = args.query
-        #
-        # bug fixed on 2014/6/24, add urlencode for param value
-        # Be careful when dealing with params
-        # replace refference object first, later replace query string
-        # at last urlencode
-        # code below needs review 2014/6/30
-        #
+        
+        if not args.basic:
+            params = params.split('^^^')    # e.g. params = ['user', 'passwd']
+                        
+            #
+            # bug fixed on 2014/6/24, add urlencode for param value
+            # Be careful when dealing with params
+            # replace refference object first, later replace query string
+            # at last urlencode
+            # code below needs review 2014/6/30
+            #
 
-        index = 0        
-        for p in selected_params:
-            # refference
-            index2 = 0
-            for p2 in selected_params:
-                params[index] = params[index].replace('{%s}' % p2[0], params[index2])
-                index2 += 1
-            index += 1
+            index = 0        
+            for p in selected_params:
+                # refference
+                index2 = 0
+                for p2 in selected_params:
+                    params[index] = params[index].replace('{%s}' % p2[0], params[index2])
+                    index2 += 1
+                index += 1
             
-        data_output = ''    # optmized output        
-        index = 0
-        for p in selected_params:    # replace value for target parameter
-            data_output += p[0] + '=' + params[index] + '&'
-            # hash support: MD5, MD5_16, SHA1
-            if args.md5.count(p[0]) > 0:
-                str_param = urllib.urlencode( {p[0]:  hashlib.md5(params[index]).hexdigest()} )
-            elif args.md5_16.count(p[0]) > 0:
-                str_param = urllib.urlencode( {p[0]:  hashlib.md5(params[index]).hexdigest()[8:24]} )
-            elif args.sha1.count(p[0]) > 0:
-                str_param = urllib.urlencode( {p[0]:  hashlib.sha1(params[index]).hexdigest()} )
-            else:
-                str_param = urllib.urlencode( {p[0]:  params[index]} )
+            data_output = ''    # optmized output        
+            index = 0
+            for p in selected_params:    # replace value for target parameter
+                data_output += p[0] + '=' + params[index] + '&'
+                # hash support: MD5, MD5_16, SHA1
+                if args.md5.count(p[0]) > 0:
+                    str_param = urllib.urlencode( {p[0]:  hashlib.md5(params[index]).hexdigest()} )
+                elif args.md5_16.count(p[0]) > 0:
+                    str_param = urllib.urlencode( {p[0]:  hashlib.md5(params[index]).hexdigest()[8:24]} )
+                elif args.sha1.count(p[0]) > 0:
+                    str_param = urllib.urlencode( {p[0]:  hashlib.sha1(params[index]).hexdigest()} )
+                else:
+                    str_param = urllib.urlencode( {p[0]:  params[index]} )
 
-            if data.find(p[0] + '=') == 0 or \
-               data.find('&' + p[0] + '=') > 0:   # found in query
-                data = re.sub('^' + p[0] + '=[^&]*', str_param, data)    
-                data = re.sub('&' + p[0] + '=[^&]*', '&' + str_param, data)
-            else:    # not found, appended to query string
-                data = data + '&' + str_param
-            index += 1
-                
-        data = data.strip('&')
-        data_output = data_output.strip('&')
+                if data.find(p[0] + '=') == 0 or \
+                   data.find('&' + p[0] + '=') > 0:   # found in query
+                    data = re.sub('^' + p[0] + '=[^&]*', str_param, data)    
+                    data = re.sub('&' + p[0] + '=[^&]*', '&' + str_param, data)
+                else:    # not found, appended to query string
+                    data = data + '&' + str_param
+                index += 1
+                    
+                data = data.strip('&')
+                data_output = data_output.strip('&')
         
         if not args.nov:
             lock.acquire()
-            print 'try', data_output
+            if args.basic:
+                print 'try', params
+            else:
+                print 'try', data_output
             lock.release()
         err_count = 0
         while err_count < 10:
@@ -403,19 +443,20 @@ def do_request():
                     lock.release()    
                     pserver, pport = cur_proxy.split(':')
                     if args.scm == 'https':    # https request via proxy server
-                        conn = httplib.HTTPSConnection(cur_proxy)
+                        conn = httplib.HTTPSConnection(cur_proxy, timeout=30)
                         if args.netloc.find(':') > 0:
                             conn.set_tunnel(args.host, args.host_port )    # port may not be 443
                         else:
                             conn.set_tunnel(args.host, 443)
                     else:
-                        conn = httplib.HTTPConnection(cur_proxy)
+                        conn = httplib.HTTPConnection(cur_proxy, timeout=30)
                     if args.fip:
-                        headers['X-Forwarded-For'] = str(random.randint(1,255)) + '.' + \
+                        local_headers['X-Forwarded-For'] = str(random.randint(1,255)) + '.' + \
                                                    str(random.randint(1,255)) + '.' + \
                                                    str(random.randint(1,255)) + '.' + \
                                                    str(random.randint(1,255))
-                        headers['PHPSESSID'] = random.randint(1, 10000000000000)
+                        local_headers['PHPSESSID'] = random.randint(1, 10000000000000)
+
                     # 
                     # Proxy server needs to know the full url
                     #
@@ -423,20 +464,20 @@ def do_request():
                         conn.request(method=args.m,
                                      url=args.scm + '://' + args.netloc + args.path,
                                      body=data,
-                                     headers=headers)
+                                     headers=local_headers)
                     else:
                         conn.request(method=args.m,
                                      url=args.scm + '://' + args.netloc + args.path + '?' + data,
-                                     headers=headers)
+                                     headers=local_headers)
                 else:    # proxy off
                     if args.scm == 'https':
-                        conn = httplib.HTTPSConnection(args.netloc)
+                        conn = httplib.HTTPSConnection(args.netloc, timeout=30)
                     else:
-                        conn = httplib.HTTPConnection(args.netloc)
+                        conn = httplib.HTTPConnection(args.netloc, timeout=30)
                     if args.m == 'POST':
-                        conn.request(method=args.m, url=args.path, body=data, headers=headers)
+                        conn.request(method=args.m, url=args.path, body=data, headers=local_headers)
                     else:
-                        conn.request(method=args.m, url=args.path + '?' + data, headers=headers)
+                        conn.request(method=args.m, url=args.path + '?' + data, headers=local_headers)
                 response = conn.getresponse()
                 res_headers = str( response.getheaders() )
                 charset = re.search('charset=([^"^>^\']*)', res_headers)    # try to find CharSet in headers
@@ -476,21 +517,28 @@ def do_request():
                     if html_doc.find(args.suc[i]) >= 0:
                         suc_tag_matched = args.suc[i]
                         if_suc = True
-
+                        
                 if (not args.no302 and response.status == 302) or \
                    (args.err and not if_err) or \
                    (args.suc and if_suc) or \
                    (args.herr and res_headers.find(args.herr) < 0) or \
-                   (args.hsuc and res_headers.find(args.hsuc) >=0 ):
+                   (args.hsuc and res_headers.find(args.hsuc) >=0 ) or \
+                   (args.basic and response.status != 401):
                     lock.acquire()
-                    print system_encode( '>>> Found %s <<<' % data_output )
-                    with open(args.o, 'a') as outFile:
-                        if not args.no302 and response.status == 302:
-                            outFile.write( system_encode( '[302] ' + data_output + '\n') )
-                        elif args.suc and if_suc:
-                            outFile.write( system_encode( '{' + suc_tag_matched + '} ' + data_output + '\n') )
-                        else:
-                            outFile.write( system_encode(data_output + '\n') )
+                    if not args.basic:
+                        print system_encode( '>>> Found %s <<<' % data_output )
+                        with open(args.o, 'a') as outFile:
+                            if not args.no302 and response.status == 302:
+                                outFile.write( system_encode( '[302] ' + data_output + '\n') )
+                            elif args.suc and if_suc:
+                                outFile.write( system_encode( '{' + suc_tag_matched + '} ' + data_output + '\n') )
+                            else:
+                                outFile.write( system_encode(data_output + '\n') )
+                    else:    # args.basic
+                        print system_encode( '>>> Found %s <<<' % params )
+                        local_headers['Authorization'] = ''
+                        with open(args.o, 'a') as outFile:
+                            outFile.write( system_encode( str(response.status) + '[Basic Auth] ' + params + ' ' + args.u + '\n') )
                     lock.release()
 
                 if args.sleep:
