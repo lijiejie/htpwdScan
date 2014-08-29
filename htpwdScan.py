@@ -375,6 +375,12 @@ def do_request():
         local_headers = copy.deepcopy(headers)
         if args.basic:
             local_headers['Authorization'] = 'Basic ' + base64.b64encode(params)    # Basic auth: 2014/7/31
+        if args.fip:
+            local_headers['X-Forwarded-For'] = str(random.randint(1,255)) + '.' + \
+                                       str(random.randint(1,255)) + '.' + \
+                                       str(random.randint(1,255)) + '.' + \
+                                       str(random.randint(1,255))
+            local_headers['PHPSESSID'] = random.randint(1, 10000000000000)
         data = args.query
         
         if not args.basic:
@@ -450,12 +456,6 @@ def do_request():
                             conn.set_tunnel(args.host, 443)
                     else:
                         conn = httplib.HTTPConnection(cur_proxy, timeout=30)
-                    if args.fip:
-                        local_headers['X-Forwarded-For'] = str(random.randint(1,255)) + '.' + \
-                                                   str(random.randint(1,255)) + '.' + \
-                                                   str(random.randint(1,255)) + '.' + \
-                                                   str(random.randint(1,255))
-                        local_headers['PHPSESSID'] = random.randint(1, 10000000000000)
 
                     # 
                     # Proxy server needs to know the full url
