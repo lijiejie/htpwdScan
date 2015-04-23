@@ -90,20 +90,20 @@ htpwdScan
 	  -hsuc HSUC            响应HTTP头的破解成功标记
 	  -rtxt RetryText       响应文本中的重试标记，出现则重试请求,
 	                        示例. -rtxt="IP blocked"
-	  -rntxt RetryNoText    响应文本中的重试标记,出现则重试请求，
+	  -rntxt RetryNoText    响应文本中的重试标记,未出现则重试请求，
 	                        示例. -rntxt="<body>"
 	  -rheader RetryHeader  响应头中的重试标记，出现则重试请求,
 	                        示例. -rheader="Set-Cookie:"
 	  -rnheader RetryNoHeader
 	                        响应头中的重试标记，未出现则重试请求,
-	                        e.g. -rheader="HTTP/1.1 200 OK"
+	                        示例. -rheader="HTTP/1.1 200 OK"
 	
 	Proxy and spoof:
 	  -proxy Server:Port    设定少量HTTP代理
 	                        示例. -proxy=127.0.0.1:8000,8.8.8.8:8000
 	  -proxylist ProxyListFile
 	                        从文件批量导入HTTP代理,
-	                        e.g. -proxylist=proxys.txt
+	                        示例. -proxylist=proxys.txt
 	  -checkproxy           检查代理服务器的可用性.
 	                        可用代理输出到 001.proxy.servers.txt
 	  -fip                  随机random X-Forwarded-For欺骗源IP
@@ -113,9 +113,9 @@ htpwdScan
 	
 	Database attack:
 	  -database DATABASE    导入社工库中的数据.
-	                        e.g. -database user,pass=csdn.txt
+	                        示例. -database user,pass=csdn.txt
 	  -regex REGEX          从社工库中提取数据的字符串，必须分组.
-	                        e.g. -regex="(\S+)\s+(\S+)"
+	                        示例. -regex="(\S+)\s+(\S+)"
 	
 	General:
 	  -t THREADS            工作线程数，默认50
