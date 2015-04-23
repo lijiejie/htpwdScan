@@ -106,7 +106,7 @@ htpwdScan
 	                        示例. -proxylist=proxys.txt
 	  -checkproxy           检查代理服务器的可用性.
 	                        可用代理输出到 001.proxy.servers.txt
-	  -fip                  随机random X-Forwarded-For欺骗源IP
+	  -fip                  生成随机X-Forwarded-For欺骗源IP
 	  -fsid FSID            生成随机session ID. 示例. -fsid PHPSESSID
 	  -sleep SECONDS        每次HTTP结束，等待SECONDS秒,
 	                        避免IP被临时屏蔽，进入黑名单
@@ -114,13 +114,13 @@ htpwdScan
 	Database attack:
 	  -database DATABASE    导入社工库中的数据.
 	                        示例. -database user,pass=csdn.txt
-	  -regex REGEX          从社工库中提取数据的字符串，必须分组.
+	  -regex REGEX          从社工库中提取数据的正则表达式，必须分组.
 	                        示例. -regex="(\S+)\s+(\S+)"
 	
 	General:
 	  -t THREADS            工作线程数，默认50
 	  -o OUTPUT             输出文件.  默认: 000.Cracked.Passwords.txt
-	  -debug                进入debug mode检查HTTP请求和HTTP响应
+	  -debug                进入debug模式检查HTTP请求和HTTP响应
 	  -nov                  只显示破解成功的条目，不显示进度
 	  -v                    show program's version number and exit
 
