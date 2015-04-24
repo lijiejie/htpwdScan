@@ -16,14 +16,14 @@ htpwdScan
 	>导入用户名密码字典即可
 
 * 表单破解
-	>htpwdScan.py -f post2.txt -d passwd=password.txt -err="success\":false"
+	>htpwdScan.py -f post2.txt -d user=user.txt passwd=password.txt -err="success\":false"
 	
-	>从 post2.txt 导入抓的http包，passwd是需要破解的参数，而password.txt是保存了密码的字典文件
+	>从 post2.txt 导入抓的http包，user和passwd是需要破解的参数，而 user.txt password.txt 是保存了密码的字典文件
 	
 	>**success":false** 是选择的失败标记，标记中若有双引号，请记得用右斜杠 \ 转义
 
 * GET参数破解
-	>htpwdScan.py -d passwd=password.txt -u="http://xxx.com/inside.php?m=login&username=test&passwd=test" -get -err="success\":false"
+	>htpwdScan.py -d passwd=password.txt -u="http://xxx.com/index.php?m=login&username=test&passwd=test" -get -err="success\":false"
 	
 	> 使用-get参数告诉脚本此处是GET请求
 	
@@ -38,13 +38,15 @@ htpwdScan
 	
 	>小米的数据行格式是 `xxx@163.com	xxxxxxx` 也即 `(用户名)空白字符(密码)`
 	
-	>`(\S+)\s+(\S+)` 指定第一个非空白字符拿去填充loginname，而第二个非空白字符串拿去填充passwd
+	>`(\S+)\s+(\S+)` 可指定第一个非空白字符拿去填充loginname，而第二个非空白字符串拿去填充passwd
 	
 	>csdn的数据行格式是`zdg # 12344321 # zdg@csdn.net` . 正则表达式写作`\S+ # (\S+) # (\S+)`
 	
 	>第一个#后面的非空白字符串填充passwd，第二个#后面的非空白字符串填充loginname
 	
 	>请注意，参数的顺序是重要的
+	
+	>-fip 是启用伪造随机IP
 	
 * 校验HTTP代理
 	> htpwdScan.py -f=post.txt -proxylist=proxies.txt -checkproxy -suc="用户名或密码错误"
@@ -56,7 +58,7 @@ htpwdScan
 	> htpwdScan.py -u=http://www.baidu.com -get -proxylist=available.txt -checkproxy -suc="百度一下"
 
 ## 完整参数说明 ##
-脚本支持的小功能较多，请耐心阅读以下以下完整说明。建议多使用 `-debug` 参数查看HTTP请求是否有问题，没问题再发起真正的破解。
+脚本支持的小功能较多，请耐心阅读以下完整说明。建议多使用 `-debug` 参数查看HTTP请求是否有问题，没问题再发起真正的破解。
 
 	usage: htpwdScan.py [options]
 	
