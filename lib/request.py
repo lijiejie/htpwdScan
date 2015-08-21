@@ -144,6 +144,7 @@ def do_request(self):
                         conn.request(method='POST', url=self.args.path, body=data, headers=local_headers)
 
                 response = conn.getresponse(); res_headers = str(response.getheaders())
+                res_status = str(response.status)
                 _ = re.search('charset=([^"^>^\']*)', res_headers); charset = _.group(1).strip() if _ else None
 
                 html_doc = decode_response_text(response.read(), charset)
@@ -189,6 +190,9 @@ def do_request(self):
                 cracked_msg = ''
                 if (not self.args.no302 and response.status == 302):
                     cracked_msg = '[+]%s \t\t{302 redirect}' % data
+
+                if self.args.ssuc and res_status in self.args.ssuc:
+                    cracked_msg = '[+]%s \t\t[Found %s in status]' % (data, self.args.ssuc)
 
                 if response.status == 200 and self.args.err and not found_err_tag:
                     cracked_msg = '[+]%s \t\t{%s not found}' % (data, self.args.err)
