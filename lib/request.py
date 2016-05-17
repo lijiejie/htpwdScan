@@ -187,8 +187,11 @@ def do_request(self):
 
                 data = urllib.unquote(data)
                 cracked_msg = ''
+		success = True
+	
                 if (not self.args.no302 and response.status == 302):
                     cracked_msg = '[+]%s \t\t{302 redirect}' % data
+		    success = False
 
                 if response.status == 200 and self.args.err and not found_err_tag:
                     cracked_msg = '[+]%s \t\t{%s not found}' % (data, self.args.err)
@@ -198,9 +201,11 @@ def do_request(self):
 
                 if self.args.herr and res_headers.find(self.args.herr) < 0:
                     cracked_msg = '[+]%s \t\t[%s not found in headers]' % (data, self.args.herr)
+		    success = True
 
                 if self.args.hsuc and res_headers.find(self.args.hsuc) >=0:
                     cracked_msg = '[+]%s \t\t[Found %s in headers]' % (data, self.args.hsuc)
+		    success = True
 
                 if self.args.basic and response.status < 400:
                     local_headers['Authorization'] = ''
@@ -209,11 +214,13 @@ def do_request(self):
                 if cracked_msg:
                     add_cracked_count(self)
                     if self.args.checkproxy:
-                        self.print_s('[+OK] %s' % cur_proxy, color_red=True)
+			if success:
+			    self.print_s('[+OK] %s' % cur_proxy, color_red=True)
                         with open('001.proxy.servers.txt', 'a') as outFile:
                             outFile.write(cur_proxy + '\n')
                     else:
-                        self.print_s(system_encode('[+OK]%s' % data_print), color_red=True)
+			if success:
+			    self.print_s(system_encode('[+OK]%s' % data_print), color_red=True)
                         with open(self.args.o, 'a') as outFile:
                             outFile.write(cracked_msg + '\n')
 
