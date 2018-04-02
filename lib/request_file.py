@@ -65,7 +65,7 @@ def parse_request(self):
     # deal with headers, no accept encoding-gzip
     keys = ['User-Agent', 'Cookie', 'Origin', 'Referer',
             'Client-IP', 'X-Forwarded-For', 'X-Forwarded-Host',
-            'Via', 'Content-Type', 'Accept-Language', 'Authorization']
+            'Via', 'Content-Type', 'Accept-Language', 'Authorization', 'X-Requested-With']
     for k in keys:
         m = re.search('%s: (.*)' % k, post_text)
         if m: self.http_headers[k] = m.group(1).strip()
