@@ -42,6 +42,8 @@ def parse_args(self):
                         help='String indicates fail in response text, \ne.g. -err "user not exist" "password wrong"')
     detect.add_argument('-suc', metavar='SUC', default='', type=str, nargs='+',
                         help='String indicates success in response text, \ne.g. -suc "welcome," "admin"')
+    detect.add_argument('-ssuc', metavar='SSUC', default='', type=str, nargs='+',
+                        help='String indicates success in status code, \ne.g. -ssuc "303" "404"')
     detect.add_argument('-herr', metavar='HERR', default='', type=str,
                         help='String indicates fail in response headers')
     detect.add_argument('-hsuc', metavar='HSUC', default='', type=str,
