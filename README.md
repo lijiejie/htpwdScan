@@ -144,13 +144,15 @@ python htpwdScan.py -f request.txt -d passwd=pass.txt login=user.txt --header-fa
 	
 
 修改上面小节中的 `request.txt` 文件，使用占位符来选取`login参数`和`passwd参数`。也可以选取任意的部分
-	POST /login.php?action=login HTTP/1.1
-	Host: www.webscantest.com
-	Content-Type: application/x-www-form-urlencoded
-	Referer: http://www.webscantest.com/login.php
-	
-	login=$$$admin$$$&passwd=$$$123456$$$&submit_login=login
+```
+POST /login.php?action=login HTTP/1.1
+Host: www.webscantest.com
+Content-Type: application/x-www-form-urlencoded
+Referer: http://www.webscantest.com/login.php
 
+login=$$$admin$$$&passwd=$$$123456$$$&submit_login=login
+
+```
 执行
 
  `python htpwdScan.py -f request.txt -d 1=user.txt 2=pass.txt --header-fail "login_error=Bad+user+name+or+password"`
