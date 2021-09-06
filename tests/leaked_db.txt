@@ -1,0 +1,15 @@
+admin   123456
+manager 222222
+manage  333333
+user    4444444
+administrator  666666
+account  777777
+super    888888
+superuser   99999
+master      10101010
+www    wwww
+web    web
+admin admin
+guest   guest
+webadmin   1111111
+webmaster  2222222

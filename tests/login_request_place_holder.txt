@@ -1,0 +1,16 @@
+POST /login.php?action=login HTTP/1.1
+Host: www.webscantest.com
+Proxy-Connection: keep-alive
+Content-Length: 44
+Cache-Control: max-age=0
+Origin: http://www.webscantest.com
+Upgrade-Insecure-Requests: 1
+DNT: 1
+Content-Type: application/x-www-form-urlencoded
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9
+Referer: http://www.webscantest.com/login.php
+Accept-Encoding: gzip, deflate
+Accept-Language: zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7
+
+login=$$$admin$$$&passwd=$$$123456$$$&submit_login=login

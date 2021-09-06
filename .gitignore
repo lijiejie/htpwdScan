@@ -1,3 +1,10 @@
+_cracked.accounts.txt
+_proxy.servers.txt
+tests/_cracked.accounts.txt
+tests/_proxy.servers.txt
+test.bat
+archive/
+venv_py/
 #################
 ## Eclipse
 #################

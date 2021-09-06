@@ -1,147 +1,158 @@
 #!/usr/bin/env python
 #
-#  Parse command line arguments and decode string
+#  Parse command line arguments
 #
 
 import argparse
 import sys
-from lib.encodings import system_decode
 import os
 import pprint
+from colorama import Fore, Back
+import re
+from lib.consle_width import CONSOLE_WIDTH
 
 
-def parse_args(self):
-    parser = argparse.ArgumentParser(prog='htpwdScan',
-                                     formatter_class=argparse.RawTextHelpFormatter,
-                                     description='* An HTTP weak pass scanner. By LiJieJie *',
-                                     usage='htpwdScan.py [options]')
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog='htpwdScan',
+        formatter_class=argparse.RawTextHelpFormatter,
+        description='* HTTP weak pass scanner. By LiJieJie *',
+        usage='htpwdScan.py [options]')
 
     target = parser.add_argument_group('Target')
-    target.add_argument('-u', metavar='REQUESTURL', type=str,
-                        help='Explicitly set request URL, e.g.\n-u="https://www.test.com/login.php"')
-    target.add_argument('-f', metavar='REQUESTFILE', type=str,
+    target.add_argument('-u', metavar='RequestURL', type=str,
+                        help='URL to brute, e.g.\n-u "https://www.test.com/login.php"')
+    target.add_argument('-f', metavar='RequestFile', type=str,
                         help='Load HTTP request from file')
-    target.add_argument('-https', default=False, action='store_true',
-                        help='Explicitly set -https when load request from file and \nSSL enabled')
-    target.add_argument('-get', default=False,
-                        action='store_true',
-                        help='Force method GET when -u was set. default: POST')
-    target.add_argument('-basic', metavar='',type=str, nargs='+',
-                        help='HTTP Basic Auth brute, \ne.g. -basic users.dic pass.dic')
+    target.add_argument('--https', default=False, action='store_true',
+                        help='Force https when load request from file\n')
+    target.add_argument('--get', default=False, action='store_true',
+                        help='Force use HTTP GET, default is POST')
+    target.add_argument('--auth', metavar='', type=str, nargs='+',
+                        help='Basic/Digest/NTLM auth brute, \n'
+                             'e.g. --auth users.txt pass.txt\n'
+                             'e.g. --auth users.txt my_own_func(pass.txt)')
+    target.add_argument('--pass-first', default=False, action='store_true',
+                        help='To avoid accounts locked, \n'
+                             'try different usernames on one password first')
 
     dictionary = parser.add_argument_group('Dictionary')
     dictionary.add_argument('-d', metavar='Param=DictFile', type=str, nargs='+',
-                        help='Set dict file for parameters, \n' + \
-                        'support hash functions like md5, md5_16, sha1. \n' + \
-                        'e.g. -d user=users.dic pass=md5(pass.dic)')
+                            help='Set dict file for parameters, \n'
+                                 'support hash functions: md5, md5_16, sha1 \n'
+                                 'e.g. -d user=users.dic pass=md5(pass.dic) \n'
+                                 'support user defined functions in lib/value_process.py\n'
+                                 'e.g. -d user=users.dic pass=capitalize(pass.dic)')
 
     detect = parser.add_argument_group('Detect')
-    detect.add_argument('-no302', default=False, action='store_true',
+    detect.add_argument('--no302', default=False, action='store_true',
                         help='302 redirect insensitive, default: sensitive')
-    detect.add_argument('-err', metavar='ERR', default='', type=str, nargs='+',
-                        help='String indicates fail in response text, \ne.g. -err "user not exist" "password wrong"')
-    detect.add_argument('-suc', metavar='SUC', default='', type=str, nargs='+',
-                        help='String indicates success in response text, \ne.g. -suc "welcome," "admin"')
-    detect.add_argument('-herr', metavar='HERR', default='', type=str,
+    detect.add_argument('--fail', metavar='Fail', default='', type=str, nargs='+',
+                        help='String indicates fail in response text, \ne.g. --fail "user not exist" "password wrong"')
+    detect.add_argument('--suc', metavar='Suc', default='', type=str, nargs='+',
+                        help='String indicates success in response text, \ne.g. --suc "welcome," "logout"')
+    detect.add_argument('--header-fail', metavar='HeaderFail', default='', type=str,
                         help='String indicates fail in response headers')
-    detect.add_argument('-hsuc', metavar='HSUC', default='', type=str,
+    detect.add_argument('--header-success', metavar='HeaderSuccess', default='', type=str,
                         help='String indicates success in response headers')
-    detect.add_argument('-rtxt', metavar='RetryText', type=str, default='',
-                        help='Retry when it appears in response text, \ne.g. -rtxt="IP blocked"')
-    detect.add_argument('-rntxt', metavar='RetryNoText', type=str, default='',
-                        help='Retry when it does not appear in response text, \ne.g. -rntxt="<body>"')
-    detect.add_argument('-rheader', metavar='RetryHeader', type=str, default='',
-                        help='Retry when it appears in response headers, \ne.g. -rheader="Set-Cookie:"')
-    detect.add_argument('-rnheader', metavar='RetryNoHeader', type=str, default='',
-                        help='Retry when it didn\'t appear in response headers, \ne.g. -rheader="HTTP/1.1 200 OK"')
+    detect.add_argument('--retry-txt', metavar='RetryText', type=str, default='',
+                        help='Retry when it appears in response text, \ne.g. --retry-txt="IP blocked"')
+    detect.add_argument('--retry-no-txt', metavar='RetryNoText', type=str, default='',
+                        help='Retry when it does not appear in response text, \ne.g. --retry-no-txt="<body>"')
+    detect.add_argument('--retry-header', metavar='RetryHeader', type=str, default='',
+                        help='Retry when it appears in response headers, \ne.g. --retry-header="Set-Cookie:"')
+    detect.add_argument('--retry-no-header', metavar='RetryNoHeader', type=str, default='',
+                        help='Retry when it didn\'t appear in response headers, \n'
+                             'e.g. --retry-no-header="HTTP/1.1 200 OK"')
 
-    proxy_spoof = parser.add_argument_group('Proxy and spoof')
-    proxy_spoof.add_argument('-proxy', metavar='Server:Port', default='', type=str,
-                        help='Set several HTTP proxies \ne.g. -proxy=127.0.0.1:8000,8.8.8.8:8000')
-    proxy_spoof.add_argument('-proxylist', metavar='ProxyListFile', default='', type=str,
-                        help='Load HTTP proxies from file, one proxy per line, \ne.g. -proxylist=proxys.txt')
-    proxy_spoof.add_argument('-checkproxy', default=False, action='store_true',
-                        help='Check the usability of loaded proxy servers.\nOutput file is 001.proxy.servers.txt')
-    proxy_spoof.add_argument('-fip', default=False, action='store_true',
-                        help='Spoof source IP by random X-Forwarded-For')
-    proxy_spoof.add_argument('-fsid', type=str,
-                        help='Use a random session ID. e.g. -fsid PHPSESSID')
-    proxy_spoof.add_argument('-sleep', metavar='SECONDS', type=str, default='',
-                        help='Sleep some time after each request,\navoid IP blocked by web server')
+    proxy_spoof = parser.add_argument_group('Proxy and Spoof')
+    proxy_spoof.add_argument('--proxy', metavar='Proxy', default='', type=str,
+                             help='Set HTTP proxies from command line \n'
+                                  'e.g. --proxy=1.2.3.4:8000, 5.6.7.8:8000')
+    proxy_spoof.add_argument('--proxy-file', metavar='ProxyFile', default='', type=str,
+                             help='Load HTTP proxies from file, delimited by line feed, \n'
+                                  'e.g. --proxy-file=proxies.txt')
+    proxy_spoof.add_argument('--check-proxy', default=False, action='store_true',
+                             help='Validate proxy servers\' status')
+    proxy_spoof.add_argument('--fake-ip', default=False, action='store_true',
+                             help='Spoof source IP by random X-Forwarded-For')
+    proxy_spoof.add_argument('--fake-sid', type=str, metavar='FakeSID',
+                             help='Use a random session ID. e.g. --fake-sid PHPSESSID')
 
     database = parser.add_argument_group('Database attack')
-    database.add_argument('-database', type=str,
-                          help='Load leaked passwords to attack. \ne.g. -database user,pass=csdn.txt')
-    database.add_argument('-regex', type=str,
-                          help='Regex used to extract values. \ne.g. -regex="(\S+)\s+(\S+)"')
+    database.add_argument('--database', metavar='param1,parma2=file', type=str,
+                          help='Load leaked passwords to attack. \ne.g. --database user,pass=csdn.txt')
+    database.add_argument('--regex', type=str,
+                          help='Regex pattern to extract values. \n'
+                               r'e.g. --regex="(\S+)\s+(\S+)"')
 
     general = parser.add_argument_group('General')
-    general.add_argument('-t', metavar='THREADS', type=int, default=50,
-                        help='50 threads by default')
-    general.add_argument('-o', metavar='OUTPUT', type=str, default='000.Cracked.Passwords.txt',
-                        help='Output file. default: 000.Cracked.Passwords.txt')
-    general.add_argument('-debug', default=False, action='store_true',
-                        help='Enter debug mode to test request and response')
-    general.add_argument('-nov', default=False, action='store_true',
-                        help='Do not print verbose info, only print cracked ones')
-    general.add_argument('-v', action='version', version='%(prog)s 0.0.3')
-
+    general.add_argument('-t', metavar='Threads', type=int, default=50,
+                         help='Number of HTTP request threads, 50 threads by default')
+    proxy_spoof.add_argument('--sleep', metavar='Seconds', type=str, default='',
+                             help='Sleep N seconds after each request to avoid IP blocked by web server')
+    general.add_argument('--allow-redirect', default=False, action='store_true',
+                         help='Allow follow 30x redirect, disallow by default')
+    general.add_argument('-o', metavar='OutFile', type=str, default='',
+                         help='Output file name')
+    general.add_argument('--debug', default=False, action='store_true',
+                         help='Enter debug mode to inspect request and response')
+    general.add_argument('--silent', default=False, action='store_true',
+                         help='No verbose output, only print cracked ones')
+    general.add_argument('-v', action='version', version='%(prog)s 1.0')
 
     if len(sys.argv) == 1:
         sys.argv.append('-h')
     args = parser.parse_args()
 
-    if args.err:
-        for i in range(len(args.err)):
-            args.err[i] = system_decode(args.err[i])
-    if args.suc:
-        for i in range(len(args.suc)):
-            args.suc[i] = system_decode(args.suc[i])
-    if args.rtxt:
-        args.rtxt = system_decode(args.rtxt)
-    if args.rntxt:
-        args.rntxt = system_decode(args.rntxt)
-
     check_args(args)
-    self.args = args
-
-    if self.args.debug:
-        self.args.t = 1    # thread set to 1 in debug mode
-        self.lock.acquire()
-        print '*' * self.console_width
-        print '[Parsed Arguments]\n'
-        pprint.pprint(self.args.__dict__)
-        print '\n' + '*' * self.console_width
-        self.lock.release()
-
-    self.request_thread_count = self.args.t
+    if args.debug:
+        # thread set to 1 in debug mode
+        args.t = 1
+        print(Back.LIGHTYELLOW_EX + Fore.RED + '[ Parsed Arguments ]')
+        pprint.pprint(args.__dict__)
+        print('\n' + '*' * CONSOLE_WIDTH)
+    return args
 
 
 def check_args(args):
-    if not args.f and not args.u:
-        msg = 'Both RequestFILE and RequestURL were not set!\n' + \
-              ' ' * 11 + 'Use -f or -u to set one'
-        raise Exception(msg)
+    try:
+        if not args.o:
+            args.o = '_proxy.servers.txt' if args.check_proxy else '_cracked.accounts.txt'
 
-    if args.basic:
-        if len(args.basic) != 2:
-            msg = 'Two dict files are required. e.g. -basic users.dic pass.dic'
+        if not args.f and not args.u:
+            msg = 'RequestFILE or RequestURL required, set with -f or -u'
             raise Exception(msg)
 
-        for df in args.basic:
-            if not os.path.exists(df):
-                raise Exception('Dict file not found: %s' % df)
+        if args.auth:
+            if len(args.auth) != 2:
+                msg = 'Two dict files required. e.g. --auth users.dic pass.dic'
+                raise Exception(msg)
 
-    if not args.basic and not args.checkproxy and not args.database and not args.d:
-        raise Exception('Please feed dict files. e.g. -d user=users.dic pass=md5(pass.dic)')
+            for _file in args.auth:
+                file_not_found = True
+                if os.path.exists(_file):
+                    file_not_found = False
+                else:
+                    m = re.search(r'.*\((.*?)\)', _file)
+                    if m and os.path.exists(m.groups()[0]):
+                        file_not_found = False
+                if file_not_found:
+                    raise Exception('Dict file not found: %s' % _file)
 
-    if args.checkproxy and os.path.exists('001.proxy.servers.txt'):
-        os.remove('001.proxy.servers.txt')
+        if not args.auth and not args.check_proxy and not args.database:
+            if not args.d:
+                raise Exception('Please feed dict files. e.g. -d user=users.dic pass=md5(pass.dic)')
 
-    if args.database:
-        data_file = args.database.split('=')[1]
-        if not os.path.exists(data_file):
-            raise Exception('File not found: %s' % data_file)
-        if not args.regex:
-            raise Exception('Please set -regex to extract data. \ne.g. -regex="(\S+)\s+(\S+)"')
+        if args.check_proxy and os.path.exists('proxy_servers_verified.txt'):
+            os.remove('proxy_servers_verified.txt')
 
+        if args.database:
+            data_file = args.database.split('=')[1]
+            if not os.path.exists(data_file):
+                raise Exception('Database file not found: %s' % data_file)
+            if not args.regex:
+                raise Exception(r'Please set --regex to extract data. \ne.g. --regex "(\S+)\s+(\S+)"')
+    except Exception as e:
+        print(Back.LIGHTYELLOW_EX + Fore.RED + '[ERROR] ' + str(e))
+        exit(-1)
