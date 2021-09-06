@@ -3,7 +3,7 @@ htpwdScan 1.0
 
 **htpwdScan** 是一个HTTP暴力破解、撞库测试工具。
 
-#### 安装
+### 安装
 
 要求 python3.6 + 
 
