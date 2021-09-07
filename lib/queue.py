@@ -15,41 +15,56 @@ import lib.value_process
 
 
 def gen_queue_auth(scanner):
-    for i in range(2):
-        m = re.search(r'(.*)\((.*?)\)', scanner.args.auth[i])
-        if m:
-            func_name, scanner.args.auth[i] = m.groups()
-            if func_name not in scanner.user_functions:
-                scanner.print_s('[ERROR] Function %s is unavailable' % func_name, color='error')
-                scanner.print_s('Functions available: %s' % ', '.join(scanner.user_functions.keys()), color='info')
-                exit(-1)
-            else:
-                scanner.selected_params[i] = scanner.user_functions[func_name]
-
-    if scanner.args.pass_first:
-        f_first = open(scanner.args.auth[1], 'r')
-        f_second = open(scanner.args.auth[0], 'r')
-    else:
-        f_first = open(scanner.args.auth[0], 'r')
-        f_second = open(scanner.args.auth[1], 'r')
-
-    for val_1 in f_first:
-        f_second.seek(0)    # Must start from beginning
-        for val_2 in f_second:
-            if scanner.args.pass_first:
-                auth_info = [val_2.strip(), val_1.strip()]
-            else:
-                auth_info = [val_1.strip(), val_2.strip()]
-            while scanner.queue.qsize() >= scanner.args.t * 2 and not scanner.STOP_ME:
-                time.sleep(0.001)
-            scanner.queue.put(auth_info)
+    if len(scanner.args.auth) == 1:    # from db.txt
+        _file = open(scanner.args.auth[0], 'r')
+        for line in _file:
+            line = line.strip()
+            if line and len(line.split()) == 2:
+                user, passwd = line.split()
+                auth_info = [user, passwd]
+                while scanner.queue.qsize() >= scanner.args.t * 2 and not scanner.STOP_ME:
+                    time.sleep(0.001)
+                scanner.queue.put(auth_info)
             if scanner.args.debug or scanner.STOP_ME:
                 break
-        if scanner.args.debug or scanner.STOP_ME:
-            break
+        _file.close()
 
-    f_first.close()
-    f_second.close()
+    else:    # from user.txt pass.txt
+        for i in range(2):
+            m = re.search(r'(.*)\((.*?)\)', scanner.args.auth[i])
+            if m:
+                func_name, scanner.args.auth[i] = m.groups()
+                if func_name not in scanner.user_functions:
+                    scanner.print_s('[ERROR] Function %s is unavailable' % func_name, color='error')
+                    scanner.print_s('Functions available: %s' % ', '.join(scanner.user_functions.keys()), color='info')
+                    exit(-1)
+                else:
+                    scanner.selected_params[i] = scanner.user_functions[func_name]
+
+        if scanner.args.pass_first:
+            f_first = open(scanner.args.auth[1], 'r')
+            f_second = open(scanner.args.auth[0], 'r')
+        else:
+            f_first = open(scanner.args.auth[0], 'r')
+            f_second = open(scanner.args.auth[1], 'r')
+
+        for val_1 in f_first:
+            f_second.seek(0)    # Must start from beginning
+            for val_2 in f_second:
+                if scanner.args.pass_first:
+                    auth_info = [val_2.strip(), val_1.strip()]
+                else:
+                    auth_info = [val_1.strip(), val_2.strip()]
+                while scanner.queue.qsize() >= scanner.args.t * 2 and not scanner.STOP_ME:
+                    time.sleep(0.001)
+                scanner.queue.put(auth_info)
+                if scanner.args.debug or scanner.STOP_ME:
+                    break
+            if scanner.args.debug or scanner.STOP_ME:
+                break
+
+        f_first.close()
+        f_second.close()
 
     for i in range(scanner.args.t):
         scanner.queue.put(None)

@@ -26,18 +26,20 @@ pip3 install requirements.txt
 
 * #### **Basic / Digest / NTLM 破解**
 
-  设置用户名、密码字典即可
+  可以分别设置用户名、密码字典，也可以设置包含用户名密码的单个字典
 
   ```
   htpwdScan.py -u https://jigsaw.w3.org/HTTP/Basic/ --auth user.txt passwd.txt
   
+  htpwdScan.py -u https://jigsaw.w3.org/HTTP/Basic/ --auth tests/leaked_db.txt
+  
   htpwdScan.py -u https://jigsaw.w3.org/HTTP/Digest/ --auth user.txt passwd.txt --pass-first
   
-  htpwdScan.py -u https://mail.owa-domain.com/ews --auth user.txt pass.txt
+  htpwdScan.py -u https://mail.owa-domain.com/ews --auth user.txt pass.txt --pass-first
   ```
 
 
-如果检测到目标支持多种认证方式，会提示选择认证方式。 请注意，如果目标是OWA，一般需要选择NTLM
+如果目标支持多种认证方式，会提示选择认证方式。 请注意，如果目标是Microsoft OWA，一般需要选择NTLM
 
 ![](docs/auth_schema.png)
 
@@ -47,7 +49,7 @@ pip3 install requirements.txt
 
 程序支持参数二次处理：计算hash、大小写转换、拼接、引用其他参数值等。
 
-**用法：一般地，使用函数名包围字典文件名。 在撞库模式下，使用函数名包围参数名**
+**用法：一般模式下，使用函数名包围字典文件名。 在撞库模式下，使用函数名包围参数名**
 
 ```
 htpwdScan.py -u https://jigsaw.w3.org/HTTP/Basic/ --auth user.txt md5(passwd.txt)
@@ -57,19 +59,19 @@ htpwdScan.py -u https://jigsaw.w3.org/HTTP/Basic/ --auth user.txt md5(passwd.txt
 
 在更复杂的场景中，可以使用函数为2拼、3拼用户名组合生成复杂密码，
 
-如用户名为 Li JieJie，生成 `LJJ@123` `LiJJ@2021` `Jiejie@2021` `jiejie@123456`。参考：[如何自定义函数](docs/functions.md)
+如用户名为 Li JieJie，生成 `LJJ@123456` `LiJJ@2021` `Jiejie@2021` `jiejie.123456`。参考：[如何自定义函数](docs/functions.md)
 
 * #### **GET参数破解**
 
-GET参数的破解非常简单，例如：破解 http://demo.com/get_brute?key=123 中的 `key` 参数
+GET参数的破解非常简单，例如：破解目标 http://demo.com/get_brute?key=123 中的 `key` 参数
 
 ```
 htpwdScan.py -u http://demo.com/get_brute?key=123 -d key=passwd.txt --get --fail FAIL
 ```
 
-1. 通过 `-d` 来导入字典： **参数名=字典路径**
-2. 通过 `--get` 显式指定使用GET方法，默认为POST
-3. 通过 `--fail`  标记一个失败的请求，正文中的标记字符串。当这个字符串没有出现时，则表明破解成功了
+- 通过 `-d` 来导入字典： **参数名=字典路径**
+- 通过 `--get` 显式指定使用GET方法，默认为POST
+- 通过 `--fail`  标记一个失败的请求，正文中的标记字符串。当这个字符串没有出现时，则表明破解成功了
 
 如果字典填充的是参数中的一部分，可使用**占位选定（使用3个$符号前后包围即可）**。
 

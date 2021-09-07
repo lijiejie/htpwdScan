@@ -31,7 +31,8 @@ def parse_args():
     target.add_argument('--auth', metavar='', type=str, nargs='+',
                         help='Basic/Digest/NTLM auth brute, \n'
                              'e.g. --auth users.txt pass.txt\n'
-                             'e.g. --auth users.txt my_own_func(pass.txt)')
+                             'e.g. --auth users.txt my_own_func(pass.txt)\n'
+                             'e.g. --auth user_and_pass.txt')
     target.add_argument('--pass-first', default=False, action='store_true',
                         help='To avoid accounts locked, \n'
                              'try different usernames on one password first')
@@ -125,8 +126,8 @@ def check_args(args):
             raise Exception(msg)
 
         if args.auth:
-            if len(args.auth) != 2:
-                msg = 'Two dict files required. e.g. --auth users.dic pass.dic'
+            if len(args.auth) not in [1, 2]:
+                msg = 'One or two dict files required: --auth users.dic pass.dic / --auth leaked_db.txt'
                 raise Exception(msg)
 
             for _file in args.auth:

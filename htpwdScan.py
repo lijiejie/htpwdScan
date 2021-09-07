@@ -96,12 +96,11 @@ class Scanner(object):
                 self.print_s('No proxy servers found.')
         else:
             if self.cracked_count:
-                self.print_s('Cracked %s item(s'
-                             ') in total, save to %s' % (self.cracked_count, self.args.o),
+                self.print_s('Cracked %s item(s) in total, save to %s' % (self.cracked_count, self.args.o),
                              color='success')
             else:
                 self.print_s('No one was cracked.')
-        self.print_s('Requests Count: %s+' % self.request_count)
+        self.print_s('Total requests count: %s' % (self.request_count + 1))
 
 
 if __name__ == '__main__':

@@ -67,6 +67,7 @@ def do_request(scanner, auth_schema_test=False, request_test=False):
     data_to_print = ''    # unquote string
     cur_proxy = ''
     origin_param_values = None
+    local_request_count = 0
 
     while not scanner.STOP_ME:
         if auth_schema_test:
@@ -83,11 +84,13 @@ def do_request(scanner, auth_schema_test=False, request_test=False):
             try:
                 origin_param_values = param_values = scanner.queue.get(timeout=1.0)
             except Exception as e:
+                scanner.request_count += local_request_count
                 scanner.thread_exit()
                 return
 
             if param_values is None:
                 scanner.queue.task_done()
+                scanner.request_count += local_request_count
                 scanner.thread_exit()
                 return
 
@@ -190,7 +193,7 @@ def do_request(scanner, auth_schema_test=False, request_test=False):
                                       headers=local_headers,
                                       allow_redirects=scanner.args.allow_redirect,
                                       proxies=proxies, auth=auth, verify=False, timeout=40)
-                scanner.request_count += 1
+                local_request_count += 1
                 if scanner.args.debug:
                     scanner.print_s('[ HTTP Request And Response ]', color='title')
                     scanner.print_s('\n{}\r\n{}\r\n\r\n'.format(
